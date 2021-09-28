@@ -380,6 +380,15 @@ fn test_send_to_address(cl: &Client) {
     let _ = cl
         .send_to_address(&addr, btc(1), None, None, None, None, None, Some(est), None, None, None)
         .unwrap();
+    let _ = cl
+        .send_to_address(&addr, btc(1), None, None, None, None, None, None, Some(false), None, None)
+        .unwrap();
+    let _ = cl
+        .send_to_address(&addr, btc(1), None, None, None, None, None, None, None, Some(5), None)
+        .unwrap();
+    let _ = cl
+        .send_to_address(&addr, btc(1), None, None, None, None, None, None, None, None, Some(true))
+        .unwrap();
 }
 
 fn test_get_received_by_address(cl: &Client) {
