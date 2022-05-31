@@ -18,17 +18,9 @@ PID1=$!
 # Make sure it's listening on its p2p port.
 sleep 3
 
-BLOCKFILTERARG=""
-if bitcoind -version | grep -q "v\\(19\|20\|21\|22\)"; then
-    BLOCKFILTERARG="-blockfilterindex=1"
-fi
-
-FALLBACKFEEARG=""
-if bitcoind -version | grep -q "v\\(20\|21\|22\)"; then
-    FALLBACKFEEARG="-fallbackfee=0.00001000"
-fi
-
-bitcoind -regtest $BLOCKFILTERARG $FALLBACKFEEARG \
+bitcoind -regtest \
+    -blockfilterindex=1 \
+    -fallbackfee=0.00001000 \
     -datadir=${TESTDIR}/2 \
     -connect=127.0.0.1:12348 \
     -rpcport=12349 \
