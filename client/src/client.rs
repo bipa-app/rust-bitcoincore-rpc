@@ -921,6 +921,36 @@ pub trait RpcApi: Sized {
         )
     }
 
+    fn send_many(
+        &self,
+        amounts: HashMap<Address, Amount>,
+        comment: Option<&str>,
+        subtract_fee_from: Option<Vec<Address>>,
+        replaceable: Option<bool>,
+        confirmation_target: Option<u32>,
+        estimate_mode: Option<json::EstimateMode>,
+        fee_rate: Option<i32>,
+    ) -> Result<bitcoin::Txid> {
+        let mut args = [
+            "".to_string().into(),
+            into_json(amounts.into_iter().map(|(address, amount)| (address, amount.as_btc())).collect::<HashMap<_, _>>())?,
+            opt_into_json(Some(0u8))?,
+            opt_into_json(comment)?,
+            opt_into_json(subtract_fee_from)?,
+            opt_into_json(replaceable)?,
+            opt_into_json(confirmation_target)?,
+            opt_into_json(estimate_mode)?,
+            opt_into_json(fee_rate)?,
+        ];
+        self.call(
+            "sendmany",
+            handle_defaults(
+                &mut args,
+                &[0.into(), "".into(), null(), null(), null(), null(), null()],
+            ),
+        )
+    }
+
     /// Attempts to add a node to the addnode list.
     /// Nodes added using addnode (or -connect) are protected from DoS disconnection and are not required to be full nodes/support SegWit as other outbound peers are (though such peers will not be synced from).
     fn add_node(&self, addr: &str) -> Result<()> {
