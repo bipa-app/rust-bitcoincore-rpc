@@ -15,7 +15,7 @@ jobs:
                     - rust: nightly
                       env:
                           RUSTFMTCHK: false
-                    - rust: 1.29.0
+                    - rust: 1.41.1
                       env:
                           PIN_VERSIONS: true
         steps:
