@@ -11,9 +11,9 @@ echo "PATH: \"$PATH\""
 if [ -n $"$PIN_VERSIONS" ]; then
     cargo generate-lockfile --verbose
 
-    cargo update --verbose --package "log" --precise "0.4.13"
+    cargo update --verbose --package "log" --precise "0.4.17"
     cargo update --verbose --package "cc" --precise "1.0.41"
-    cargo update --verbose --package "cfg-if" --precise "0.1.9"
+    cargo update --verbose --package "cfg-if" --precise "1.0.0"
     cargo update --verbose --package "serde_json" --precise "1.0.39"
     cargo update --verbose --package "serde" --precise "1.0.98"
     cargo update --verbose --package "serde_derive" --precise "1.0.98"
