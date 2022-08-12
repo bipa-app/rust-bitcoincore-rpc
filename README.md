@@ -47,10 +47,10 @@ The following versions are officially supported and automatically tested:
 * 0.21.0
 
 # Minimum Supported Rust Version (MSRV)
-This library should always compile with any combination of features on **Rust 1.29**.
+This library should always compile with any combination of features on **Rust 1.41.1**.
 
 Because some dependencies have broken the build in minor/patch releases, to
-compile with 1.29.0 you will need to run the following version-pinning command:
+compile with 1.41.1 you will need to run the following version-pinning command:
 ```
 cargo update --package "cc" --precise "1.0.41"
 cargo update --package "log:0.4.x" --precise "0.4.13" # x being the highest patch version, currently 14
