@@ -21,18 +21,31 @@ extern crate log;
 #[allow(unused)]
 #[macro_use] // `macro_use` is needed for v1.24.0 compilation.
 extern crate serde;
-extern crate serde_json;
 
 pub extern crate jsonrpc;
 
 pub extern crate bitcoincore_rpc_json;
+pub use crate::json::bitcoin;
 pub use bitcoincore_rpc_json as json;
-pub use json::bitcoin;
+use json::bitcoin::consensus::{Decodable, ReadExt};
+use json::bitcoin::hashes::hex::HexIterator;
 
 mod client;
 mod error;
 mod queryable;
 
-pub use client::*;
-pub use error::Error;
-pub use queryable::*;
+pub use crate::client::*;
+pub use crate::error::Error;
+pub use crate::queryable::*;
+
+fn deserialize_hex<T: Decodable>(hex: &str) -> Result<T> {
+    let mut reader = HexIterator::new(&hex)?;
+    let object = Decodable::consensus_decode(&mut reader)?;
+    if reader.read_u8().is_ok() {
+        Err(Error::BitcoinSerialization(bitcoin::consensus::encode::Error::ParseFailed(
+            "data not consumed entirely when explicitly deserializing",
+        )))
+    } else {
+        Ok(object)
+    }
+}

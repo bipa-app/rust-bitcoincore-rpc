@@ -8,7 +8,7 @@ mkdir -p ${TESTDIR}/1 ${TESTDIR}/2
 # To kill any remaining open bitcoind.
 killall -9 bitcoind
 
-bitcoind -regtest \
+./../bitcoin-$BITCOINVERSION/bin/bitcoind -regtest \
     -datadir=${TESTDIR}/1 \
     -port=12348 \
     -server=0 \
@@ -18,7 +18,7 @@ PID1=$!
 # Make sure it's listening on its p2p port.
 sleep 3
 
-bitcoind -regtest \
+./../bitcoin-$BITCOINVERSION/bin/bitcoind -regtest \
     -blockfilterindex=1 \
     -fallbackfee=0.00001000 \
     -datadir=${TESTDIR}/2 \

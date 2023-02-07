@@ -1,6 +1,6 @@
 [package]
 name = "bitcoincore-rpc-json"
-version = "0.15.0"
+version = "0.16.0"
 authors = [
     "Steven Roose <steven@stevenroose.org>",
     "Jean Pierre Dudey <jeandudey@hotmail.com>",
@@ -12,6 +12,7 @@ repository = "https://github.com/rust-bitcoin/rust-bitcoincore-rpc/"
 description = "JSON-enabled type structs for bitcoincore-rpc crate."
 keywords = [ "crypto", "bitcoin", "bitcoin-core", "rpc" ]
 readme = "README.md"
+edition = "2018"
 
 [lib]
 name = "bitcoincore_rpc_json"

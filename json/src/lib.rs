@@ -132,6 +132,16 @@ pub struct LoadWalletResult {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
+pub struct ListWalletDirResult {
+    pub wallets: Vec<ListWalletDirItem>,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
+pub struct ListWalletDirItem {
+    pub name: String,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
 pub struct GetWalletInfoResult {
     #[serde(rename = "walletname")]
     pub wallet_name: String,
@@ -146,7 +156,7 @@ pub struct GetWalletInfoResult {
     #[serde(rename = "txcount")]
     pub tx_count: usize,
     #[serde(rename = "keypoololdest")]
-    pub keypool_oldest: usize,
+    pub keypool_oldest: Option<usize>,
     #[serde(rename = "keypoolsize")]
     pub keypool_size: usize,
     #[serde(rename = "keypoolsize_hd_internal")]
@@ -184,7 +194,7 @@ pub struct GetBlockResult {
     pub weight: usize,
     pub height: usize,
     pub version: i32,
-    #[serde(default, with = "::serde_hex::opt")]
+    #[serde(default, with = "crate::serde_hex::opt")]
     pub version_hex: Option<Vec<u8>>,
     pub merkleroot: bitcoin::TxMerkleNode,
     pub tx: Vec<bitcoin::Txid>,
@@ -193,7 +203,7 @@ pub struct GetBlockResult {
     pub nonce: u32,
     pub bits: String,
     pub difficulty: f64,
-    #[serde(with = "::serde_hex")]
+    #[serde(with = "crate::serde_hex")]
     pub chainwork: Vec<u8>,
     pub n_tx: usize,
     pub previousblockhash: Option<bitcoin::BlockHash>,
@@ -207,7 +217,7 @@ pub struct GetBlockHeaderResult {
     pub confirmations: i32,
     pub height: usize,
     pub version: i32,
-    #[serde(default, with = "::serde_hex::opt")]
+    #[serde(default, with = "crate::serde_hex::opt")]
     pub version_hex: Option<Vec<u8>>,
     #[serde(rename = "merkleroot")]
     pub merkle_root: bitcoin::TxMerkleNode,
@@ -217,7 +227,7 @@ pub struct GetBlockHeaderResult {
     pub nonce: u32,
     pub bits: String,
     pub difficulty: f64,
-    #[serde(with = "::serde_hex")]
+    #[serde(with = "crate::serde_hex")]
     pub chainwork: Vec<u8>,
     pub n_tx: usize,
     #[serde(rename = "previousblockhash")]
@@ -505,7 +515,7 @@ pub struct GetMiningInfoResult {
 #[serde(rename_all = "camelCase")]
 pub struct GetRawTransactionResultVinScriptSig {
     pub asm: String,
-    #[serde(with = "::serde_hex")]
+    #[serde(with = "crate::serde_hex")]
     pub hex: Vec<u8>,
 }
 
@@ -520,7 +530,7 @@ impl GetRawTransactionResultVinScriptSig {
 pub struct GetRawTransactionResultVin {
     pub sequence: u32,
     /// The raw scriptSig in case of a coinbase tx.
-    #[serde(default, with = "::serde_hex::opt")]
+    #[serde(default, with = "crate::serde_hex::opt")]
     pub coinbase: Option<Vec<u8>>,
     /// Not provided for coinbase txs.
     pub txid: Option<bitcoin::Txid>,
@@ -546,12 +556,17 @@ impl GetRawTransactionResultVin {
 #[serde(rename_all = "camelCase")]
 pub struct GetRawTransactionResultVoutScriptPubKey {
     pub asm: String,
-    #[serde(with = "::serde_hex")]
+    #[serde(with = "crate::serde_hex")]
     pub hex: Vec<u8>,
     pub req_sigs: Option<usize>,
     #[serde(rename = "type")]
     pub type_: Option<ScriptPubkeyType>,
-    pub addresses: Option<Vec<Address>>,
+    // Deprecated in Bitcoin Core 22
+    #[serde(default)]
+    pub addresses: Vec<Address>,
+    // Added in Bitcoin Core 22
+    #[serde(default)]
+    pub address: Option<Address>,
 }
 
 impl GetRawTransactionResultVoutScriptPubKey {
@@ -574,7 +589,7 @@ pub struct GetRawTransactionResultVout {
 pub struct GetRawTransactionResult {
     #[serde(rename = "in_active_chain")]
     pub in_active_chain: Option<bool>,
-    #[serde(with = "::serde_hex")]
+    #[serde(with = "crate::serde_hex")]
     pub hex: Vec<u8>,
     pub txid: bitcoin::Txid,
     pub hash: bitcoin::Wtxid,
@@ -593,7 +608,7 @@ pub struct GetRawTransactionResult {
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
 pub struct GetBlockFilterResult {
     pub header: bitcoin::FilterHash,
-    #[serde(with = "::serde_hex")]
+    #[serde(with = "crate::serde_hex")]
     pub filter: Vec<u8>,
 }
 
@@ -683,7 +698,7 @@ pub struct GetTransactionResult {
     #[serde(default, with = "bitcoin::util::amount::serde::as_btc::opt")]
     pub fee: Option<SignedAmount>,
     pub details: Vec<GetTransactionResultDetail>,
-    #[serde(with = "::serde_hex")]
+    #[serde(with = "crate::serde_hex")]
     pub hex: Vec<u8>,
 }
 
@@ -794,7 +809,7 @@ pub struct SignRawTransactionResultError {
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SignRawTransactionResult {
-    #[serde(with = "::serde_hex")]
+    #[serde(with = "crate::serde_hex")]
     pub hex: Vec<u8>,
     pub complete: bool,
     pub errors: Option<Vec<SignRawTransactionResultError>>,
@@ -863,6 +878,8 @@ pub struct Bip9SoftforkInfo {
 pub enum SoftforkType {
     Buried,
     Bip9,
+    #[serde(other)]
+    Other,
 }
 
 /// Status of a softfork
@@ -901,11 +918,11 @@ pub struct GetAddressInfoResultEmbedded {
     #[serde(rename = "is_witness")]
     pub is_witness: Option<bool>,
     pub witness_version: Option<u32>,
-    #[serde(with = "::serde_hex")]
+    #[serde(with = "crate::serde_hex")]
     pub witness_program: Vec<u8>,
     pub script: Option<ScriptPubkeyType>,
     /// The redeemscript for the p2sh address.
-    #[serde(default, with = "::serde_hex::opt")]
+    #[serde(default, with = "crate::serde_hex::opt")]
     pub hex: Option<Vec<u8>>,
     pub pubkeys: Option<Vec<PublicKey>>,
     #[serde(rename = "sigsrequired")]
@@ -953,11 +970,11 @@ pub struct GetAddressInfoResult {
     #[serde(rename = "iswitness")]
     pub is_witness: Option<bool>,
     pub witness_version: Option<u32>,
-    #[serde(default, with = "::serde_hex::opt")]
+    #[serde(default, with = "crate::serde_hex::opt")]
     pub witness_program: Option<Vec<u8>>,
     pub script: Option<ScriptPubkeyType>,
     /// The redeemscript for the p2sh address.
-    #[serde(default, with = "::serde_hex::opt")]
+    #[serde(default, with = "crate::serde_hex::opt")]
     pub hex: Option<Vec<u8>>,
     pub pubkeys: Option<Vec<PublicKey>>,
     #[serde(rename = "sigsrequired")]
@@ -1002,7 +1019,7 @@ pub struct GetBlockchainInfoResult {
     #[serde(rename = "initialblockdownload")]
     pub initial_block_download: bool,
     /// Total amount of work in active chain, in hexadecimal
-    #[serde(rename = "chainwork", with = "::serde_hex")]
+    #[serde(rename = "chainwork", with = "crate::serde_hex")]
     pub chain_work: Vec<u8>,
     /// The estimated size of the block and undo files on disk
     pub size_on_disk: u64,
@@ -1026,6 +1043,39 @@ pub struct GetBlockchainInfoResult {
 pub enum ImportMultiRequestScriptPubkey<'a> {
     Address(&'a Address),
     Script(&'a Script),
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
+pub struct GetMempoolInfoResult {
+    /// True if the mempool is fully loaded
+    pub loaded: bool,
+    /// Current tx count
+    pub size: usize,
+    /// Sum of all virtual transaction sizes as defined in BIP 141. Differs from actual serialized size because witness data is discounted
+    pub bytes: usize,
+    /// Total memory usage for the mempool
+    pub usage: usize,
+    /// Total fees for the mempool in BTC, ignoring modified fees through prioritisetransaction
+    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
+    pub total_fee: Amount,
+    /// Maximum memory usage for the mempool
+    #[serde(rename = "maxmempool")]
+    pub max_mempool: usize,
+    /// Minimum fee rate in BTC/kvB for tx to be accepted. Is the maximum of minrelaytxfee and minimum mempool fee
+    #[serde(rename = "mempoolminfee", with = "bitcoin::util::amount::serde::as_btc")]
+    pub mempool_min_fee: Amount,
+    /// Current minimum relay fee for transactions
+    #[serde(rename = "minrelaytxfee", with = "bitcoin::util::amount::serde::as_btc")]
+    pub min_relay_tx_fee: Amount,
+    /// Minimum fee rate increment for mempool limiting or replacement in BTC/kvB
+    #[serde(rename = "incrementalrelayfee", with = "bitcoin::util::amount::serde::as_btc")]
+    pub incremental_relay_fee: Amount,
+    /// Current number of transactions that haven't passed initial broadcast yet
+    #[serde(rename = "unbroadcastcount")]
+    pub unbroadcast_count: usize,
+    /// True if the mempool accepts RBF without replaceability signaling inspection
+    #[serde(rename = "fullrbf")]
+    pub full_rbf: bool,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
@@ -1115,7 +1165,7 @@ impl<'a> serde::Serialize for ImportMultiRequestScriptPubkey<'a> {
 /// Note: unlike in bitcoind, `timestamp` defaults to 0.
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize)]
 pub struct ImportMultiRequest<'a> {
-    pub timestamp: ImportMultiRescanSince,
+    pub timestamp: Timestamp,
     /// If using descriptor, do not also provide address/scriptPubKey, scripts, or pubkeys.
     #[serde(rename = "desc", skip_serializing_if = "Option::is_none")]
     pub descriptor: Option<&'a str>,
@@ -1148,24 +1198,24 @@ pub struct ImportMultiOptions {
 }
 
 #[derive(Clone, PartialEq, Eq, Copy, Debug)]
-pub enum ImportMultiRescanSince {
+pub enum Timestamp {
     Now,
-    Timestamp(u64),
+    Time(u64),
 }
 
-impl serde::Serialize for ImportMultiRescanSince {
+impl serde::Serialize for Timestamp {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
         match *self {
-            ImportMultiRescanSince::Now => serializer.serialize_str("now"),
-            ImportMultiRescanSince::Timestamp(timestamp) => serializer.serialize_u64(timestamp),
+            Timestamp::Now => serializer.serialize_str("now"),
+            Timestamp::Time(timestamp) => serializer.serialize_u64(timestamp),
         }
     }
 }
 
-impl<'de> serde::Deserialize<'de> for ImportMultiRescanSince {
+impl<'de> serde::Deserialize<'de> for Timestamp {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -1173,7 +1223,7 @@ impl<'de> serde::Deserialize<'de> for ImportMultiRescanSince {
         use serde::de;
         struct Visitor;
         impl<'de> de::Visitor<'de> for Visitor {
-            type Value = ImportMultiRescanSince;
+            type Value = Timestamp;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 write!(formatter, "unix timestamp or 'now'")
@@ -1183,7 +1233,7 @@ impl<'de> serde::Deserialize<'de> for ImportMultiRescanSince {
             where
                 E: de::Error,
             {
-                Ok(ImportMultiRescanSince::Timestamp(value))
+                Ok(Timestamp::Time(value))
             }
 
             fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
@@ -1191,7 +1241,7 @@ impl<'de> serde::Deserialize<'de> for ImportMultiRescanSince {
                 E: de::Error,
             {
                 if value == "now" {
-                    Ok(ImportMultiRescanSince::Now)
+                    Ok(Timestamp::Now)
                 } else {
                     Err(de::Error::custom(format!(
                         "invalid str '{}', expecting 'now' or unix timestamp",
@@ -1204,21 +1254,21 @@ impl<'de> serde::Deserialize<'de> for ImportMultiRescanSince {
     }
 }
 
-impl Default for ImportMultiRescanSince {
+impl Default for Timestamp {
     fn default() -> Self {
-        ImportMultiRescanSince::Timestamp(0)
+        Timestamp::Time(0)
     }
 }
 
-impl From<u64> for ImportMultiRescanSince {
-    fn from(timestamp: u64) -> Self {
-        ImportMultiRescanSince::Timestamp(timestamp)
+impl From<u64> for Timestamp {
+    fn from(t: u64) -> Self {
+        Timestamp::Time(t)
     }
 }
 
-impl From<Option<u64>> for ImportMultiRescanSince {
+impl From<Option<u64>> for Timestamp {
     fn from(timestamp: Option<u64>) -> Self {
-        timestamp.map_or(ImportMultiRescanSince::Now, ImportMultiRescanSince::Timestamp)
+        timestamp.map_or(Timestamp::Now, Timestamp::Time)
     }
 }
 
@@ -1234,6 +1284,24 @@ pub struct ImportMultiResult {
     #[serde(default)]
     pub warnings: Vec<String>,
     pub error: Option<ImportMultiResultError>,
+}
+
+/// A import request for importdescriptors.
+#[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize, Serialize)]
+pub struct ImportDescriptors {
+    #[serde(rename = "desc")]
+    pub descriptor: String,
+    pub timestamp: Timestamp,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub range: Option<(usize, usize)>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_index: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub internal: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
 }
 
 /// Progress toward rejecting pre-softfork blocks
@@ -1474,7 +1542,7 @@ pub enum GetBlockTemplateModes {
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
 pub struct GetBlockTemplateResult {
     /// The compressed difficulty in hexadecimal
-    #[serde(with = "::serde_hex")]
+    #[serde(with = "crate::serde_hex")]
     pub bits: Vec<u8>,
     /// The previous block hash the current template is mining on
     #[serde(rename = "previousblockhash")]
@@ -1503,7 +1571,7 @@ pub struct GetBlockTemplateResult {
     pub capabilities: Vec<GetBlockTemplateResultCapabilities>,
     /// Set of pending, supported versionbit (BIP 9) softfork deployments
     #[serde(rename = "vbavailable")]
-    pub version_bits_available: HashMap<u32, String>,
+    pub version_bits_available: HashMap<String, u32>,
     /// Bit mask of versionbits the server requires set in submissions
     #[serde(rename = "vbrequired")]
     pub version_bits_required: u32,
@@ -1530,7 +1598,7 @@ pub struct GetBlockTemplateResult {
     #[serde(rename = "coinbasevalue", with = "bitcoin::util::amount::serde::as_sat", default)]
     pub coinbase_value: Amount,
     /// The number which valid hashes must be less than, in big-endian
-    #[serde(with = "::serde_hex")]
+    #[serde(with = "crate::serde_hex")]
     pub target: Vec<u8>,
     /// The minimum timestamp appropriate for the next block time. Expressed as
     /// UNIX timestamp.
@@ -1540,7 +1608,7 @@ pub struct GetBlockTemplateResult {
     /// block
     pub mutable: Vec<GetBlockTemplateResulMutations>,
     /// A range of valid nonces
-    #[serde(with = "::serde_hex", rename = "noncerange")]
+    #[serde(with = "crate::serde_hex", rename = "noncerange")]
     pub nonce_range: Vec<u8>,
 }
 
@@ -1553,7 +1621,7 @@ pub struct GetBlockTemplateResultTransaction {
     #[serde(rename = "hash")]
     pub wtxid: bitcoin::Wtxid,
     /// The serilaized transaction bytes
-    #[serde(with = "::serde_hex", rename = "data")]
+    #[serde(with = "crate::serde_hex", rename = "data")]
     pub raw_tx: Vec<u8>,
     // The transaction fee
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
@@ -1677,9 +1745,23 @@ pub struct WalletCreateFundedPsbtOptions {
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
 pub struct FinalizePsbtResult {
     pub psbt: Option<String>,
-    #[serde(default, with = "::serde_hex::opt")]
+    #[serde(default, with = "crate::serde_hex::opt")]
     pub hex: Option<Vec<u8>>,
     pub complete: bool,
+}
+
+/// Model for decode transaction
+#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
+pub struct DecodeRawTransactionResult {
+    pub txid: bitcoin::Txid,
+    pub hash: bitcoin::Wtxid,
+    pub size: u32,
+    pub vsize: u32,
+    pub weight: u32,
+    pub version: u32,
+    pub locktime: u32,
+    pub vin: Vec<GetRawTransactionResultVin>,
+    pub vout: Vec<GetRawTransactionResultVout>,
 }
 
 /// Models the result of "getchaintips"
@@ -1804,7 +1886,7 @@ pub struct FundRawTransactionOptions {
 #[derive(Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct FundRawTransactionResult {
-    #[serde(with = "::serde_hex")]
+    #[serde(with = "crate::serde_hex")]
     pub hex: Vec<u8>,
     #[serde(with = "bitcoin::util::amount::serde::as_btc")]
     pub fee: Amount,
@@ -1852,27 +1934,96 @@ pub struct SignRawTransactionInput {
     pub amount: Option<Amount>,
 }
 
+/// Used to represent UTXO set hash type
+#[derive(Clone, Serialize, PartialEq, Eq, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum TxOutSetHashType {
+    HashSerialized2,
+    Muhash,
+    None,
+}
+
+/// Used to specify a block hash or a height
+#[derive(Clone, Serialize, PartialEq, Eq, Debug)]
+#[serde(untagged)]
+pub enum HashOrHeight {
+    BlockHash(bitcoin::BlockHash),
+    Height(u64),
+}
+
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
 pub struct GetTxOutSetInfoResult {
-    /// The current block height (index)
+    /// The block height (index) of the returned statistics
     pub height: u64,
-    /// The hash of the block at the tip of the chain
+    /// The hash of the block at which these statistics are calculated
     #[serde(rename = "bestblock")]
     pub best_block: bitcoin::BlockHash,
-    /// The number of transactions with unspent outputs
-    pub transactions: u64,
+    /// The number of transactions with unspent outputs (not available when coinstatsindex is used)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transactions: Option<u64>,
     /// The number of unspent transaction outputs
     #[serde(rename = "txouts")]
     pub tx_outs: u64,
     /// A meaningless metric for UTXO set size
     pub bogosize: u64,
-    /// The serialized hash
-    pub hash_serialized_2: sha256::Hash,
-    /// The estimated size of the chainstate on disk
-    pub disk_size: u64,
+    /// The serialized hash (only present if 'hash_serialized_2' hash_type is chosen)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hash_serialized_2: Option<sha256::Hash>,
+    /// The serialized hash (only present if 'muhash' hash_type is chosen)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub muhash: Option<sha256::Hash>,
+    /// The estimated size of the chainstate on disk (not available when coinstatsindex is used)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disk_size: Option<u64>,
     /// The total amount
     #[serde(with = "bitcoin::util::amount::serde::as_btc")]
     pub total_amount: Amount,
+    /// The total amount of coins permanently excluded from the UTXO set (only available if coinstatsindex is used)
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "bitcoin::util::amount::serde::as_btc::opt"
+    )]
+    pub total_unspendable_amount: Option<Amount>,
+    /// Info on amounts in the block at this block height (only available if coinstatsindex is used)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub block_info: Option<BlockInfo>,
+}
+
+/// Info on amounts in the block at the block height of the `gettxoutsetinfo` call (only available if coinstatsindex is used)
+#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
+pub struct BlockInfo {
+    /// Amount of previous outputs spent
+    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
+    pub prevout_spent: Amount,
+    /// Output size of the coinbase transaction
+    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
+    pub coinbase: Amount,
+    /// Newly-created outputs
+    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
+    pub new_outputs_ex_coinbase: Amount,
+    /// Amount of unspendable outputs
+    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
+    pub unspendable: Amount,
+    /// Detailed view of the unspendable categories
+    pub unspendables: Unspendables,
+}
+
+/// Detailed view of the unspendable categories
+#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
+pub struct Unspendables {
+    /// Unspendable coins from the Genesis block
+    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
+    pub genesis_block: Amount,
+    /// Transactions overridden by duplicates (no longer possible with BIP30)
+    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
+    pub bip30: Amount,
+    /// Amounts sent to scripts that are unspendable (for example OP_RETURN outputs)
+    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
+    pub scripts: Amount,
+    /// Fee rewards that miners did not claim in their coinbase transaction
+    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
+    pub unclaimed_rewards: Amount,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
@@ -1915,6 +2066,7 @@ pub enum AddressType {
     Legacy,
     P2shSegwit,
     Bech32,
+    Bech32m,
 }
 
 /// Used to represent arguments that can either be an address or a public key.
@@ -1993,4 +2145,19 @@ where
         res.push(FromHex::from_hex(&h).map_err(D::Error::custom)?);
     }
     Ok(Some(res))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_softfork_type() {
+        let buried: SoftforkType = serde_json::from_str("\"buried\"").unwrap();
+        assert_eq!(buried, SoftforkType::Buried);
+        let bip9: SoftforkType = serde_json::from_str("\"bip9\"").unwrap();
+        assert_eq!(bip9, SoftforkType::Bip9);
+        let other: SoftforkType = serde_json::from_str("\"bip8\"").unwrap();
+        assert_eq!(other, SoftforkType::Other);
+    }
 }
