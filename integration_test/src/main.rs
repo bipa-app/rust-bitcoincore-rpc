@@ -498,7 +498,8 @@ fn test_get_raw_mempool(cl: &Client) {
 }
 
 fn test_get_raw_mempool_verbose(cl: &Client) {
-    cl.send_to_address(&RANDOM_ADDRESS, btc(1), None, None, None, None, None, None).unwrap();
+    cl.send_to_address(&RANDOM_ADDRESS, btc(1), None, None, None, None, None, None, None, None)
+        .unwrap();
     let _ = cl.get_raw_mempool_verbose().unwrap();
 
     // cleanup mempool transaction
