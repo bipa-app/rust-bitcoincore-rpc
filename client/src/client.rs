@@ -14,28 +14,30 @@ use std::iter::FromIterator;
 use std::path::PathBuf;
 use std::{fmt, result};
 
-use bitcoin;
+use crate::{bitcoin, deserialize_hex};
 use jsonrpc;
 use serde;
 use serde_json;
 
-use bitcoin::hashes::hex::{FromHex, ToHex};
-use bitcoin::secp256k1::ecdsa::Signature;
-use bitcoin::{
+use crate::bitcoin::hashes::hex::{FromHex, ToHex};
+use crate::bitcoin::secp256k1::ecdsa::Signature;
+use crate::bitcoin::{
     Address, Amount, Block, BlockHeader, OutPoint, PrivateKey, PublicKey, Script, Transaction,
 };
 use log::Level::{Debug, Trace, Warn};
 
-use error::*;
-use json;
-use queryable;
+use crate::error::*;
+use crate::json;
+use crate::queryable;
 
 /// Crate-specific Result type, shorthand for `std::result::Result` with our
 /// crate-specific Error type;
 pub type Result<T> = result::Result<T, Error>;
 
+/// Outpoint that serializes and deserializes as a map, instead of a string,
+/// for use as RPC arguments
 #[derive(Clone, Debug, Serialize, Deserialize)]
-struct JsonOutPoint {
+pub struct JsonOutPoint {
     pub txid: bitcoin::Txid,
     pub vout: u32,
 }
@@ -291,6 +293,12 @@ pub trait RpcApi: Sized {
         self.call("listwallets", &[])
     }
 
+    fn list_wallet_dir(&self) -> Result<Vec<String>> {
+        let result: json::ListWalletDirResult = self.call("listwalletdir", &[])?;
+        let names = result.wallets.into_iter().map(|x| x.name).collect();
+        Ok(names)
+    }
+
     fn get_wallet_info(&self) -> Result<json::GetWalletInfoResult> {
         self.call("getwalletinfo", &[])
     }
@@ -318,8 +326,7 @@ pub trait RpcApi: Sized {
 
     fn get_block(&self, hash: &bitcoin::BlockHash) -> Result<Block> {
         let hex: String = self.call("getblock", &[into_json(hash)?, 0.into()])?;
-        let bytes: Vec<u8> = FromHex::from_hex(&hex)?;
-        Ok(bitcoin::consensus::encode::deserialize(&bytes)?)
+        deserialize_hex(&hex)
     }
 
     fn get_block_hex(&self, hash: &bitcoin::BlockHash) -> Result<String> {
@@ -333,8 +340,7 @@ pub trait RpcApi: Sized {
 
     fn get_block_header(&self, hash: &bitcoin::BlockHash) -> Result<BlockHeader> {
         let hex: String = self.call("getblockheader", &[into_json(hash)?, false.into()])?;
-        let bytes: Vec<u8> = FromHex::from_hex(&hex)?;
-        Ok(bitcoin::consensus::encode::deserialize(&bytes)?)
+        deserialize_hex(&hex)
     }
 
     fn get_block_header_info(
@@ -379,7 +385,7 @@ pub trait RpcApi: Sized {
         // - 0.18.x returns a "softforks" array and a "bip9_softforks" map.
         // - 0.19.x returns a "softforks" map.
         Ok(if self.version()? < 190000 {
-            use Error::UnexpectedStructure as err;
+            use crate::Error::UnexpectedStructure as err;
 
             // First, remove both incompatible softfork fields.
             // We need to scope the mutable ref here for v1.29 borrowck.
@@ -478,8 +484,7 @@ pub trait RpcApi: Sized {
     ) -> Result<Transaction> {
         let mut args = [into_json(txid)?, into_json(false)?, opt_into_json(block_hash)?];
         let hex: String = self.call("getrawtransaction", handle_defaults(&mut args, &[null()]))?;
-        let bytes: Vec<u8> = FromHex::from_hex(&hex)?;
-        Ok(bitcoin::consensus::encode::deserialize(&bytes)?)
+        deserialize_hex(&hex)
     }
 
     fn get_raw_transaction_hex(
@@ -652,6 +657,14 @@ pub trait RpcApi: Sized {
         self.call("importmulti", handle_defaults(&mut args, &[null()]))
     }
 
+    fn import_descriptors(
+        &self,
+        req: json::ImportDescriptors,
+    ) -> Result<Vec<json::ImportMultiResult>> {
+        let json_request = vec![serde_json::to_value(req)?];
+        self.call("importdescriptors", handle_defaults(&mut [json_request.into()], &[null()]))
+    }
+
     fn set_label(&self, address: &Address, label: &str) -> Result<()> {
         self.call("setlabel", &[address.to_string().into(), label.into()])
     }
@@ -719,6 +732,27 @@ pub trait RpcApi: Sized {
         self.call("listreceivedbyaddress", handle_defaults(&mut args, &defaults))
     }
 
+    fn create_psbt(
+        &self,
+        inputs: &[json::CreateRawTransactionInput],
+        outputs: &HashMap<String, Amount>,
+        locktime: Option<i64>,
+        replaceable: Option<bool>,
+    ) -> Result<String> {
+        let outs_converted = serde_json::Map::from_iter(
+            outputs.iter().map(|(k, v)| (k.clone(), serde_json::Value::from(v.to_btc()))),
+        );
+        self.call(
+            "createpsbt",
+            &[
+                into_json(inputs)?,
+                into_json(outs_converted)?,
+                into_json(locktime)?,
+                into_json(replaceable)?,
+            ],
+        )
+    }
+
     fn create_raw_transaction_hex(
         &self,
         utxos: &[json::CreateRawTransactionInput],
@@ -747,8 +781,17 @@ pub trait RpcApi: Sized {
         replaceable: Option<bool>,
     ) -> Result<Transaction> {
         let hex: String = self.create_raw_transaction_hex(utxos, outs, locktime, replaceable)?;
-        let bytes: Vec<u8> = FromHex::from_hex(&hex)?;
-        Ok(bitcoin::consensus::encode::deserialize(&bytes)?)
+        deserialize_hex(&hex)
+    }
+
+    fn decode_raw_transaction<R: RawTx>(
+        &self,
+        tx: R,
+        is_witness: Option<bool>,
+    ) -> Result<json::DecodeRawTransactionResult> {
+        let mut args = [tx.raw_hex().into(), opt_into_json(is_witness)?];
+        let defaults = [null()];
+        self.call("decoderawtransaction", handle_defaults(&mut args, &defaults))
     }
 
     fn fund_raw_transaction<R: RawTx>(
@@ -840,6 +883,11 @@ pub trait RpcApi: Sized {
         self.call("getnewaddress", &[opt_into_json(label)?, opt_into_json(address_type)?])
     }
 
+    /// Generate new address for receiving change
+    fn get_raw_change_address(&self, address_type: Option<json::AddressType>) -> Result<Address> {
+        self.call("getrawchangeaddress", &[opt_into_json(address_type)?])
+    }
+
     fn get_address_info(&self, address: &Address) -> Result<json::GetAddressInfoResult> {
         self.call("getaddressinfo", &[address.to_string().into()])
     }
@@ -871,9 +919,21 @@ pub trait RpcApi: Sized {
         self.call("reconsiderblock", &[into_json(block_hash)?])
     }
 
+    /// Returns details on the active state of the TX memory pool
+    fn get_mempool_info(&self) -> Result<json::GetMempoolInfoResult> {
+        self.call("getmempoolinfo", &[])
+    }
+
     /// Get txids of all transactions in a memory pool
     fn get_raw_mempool(&self) -> Result<Vec<bitcoin::Txid>> {
         self.call("getrawmempool", &[])
+    }
+
+    /// Get details for the transactions in a memory pool
+    fn get_raw_mempool_verbose(
+        &self,
+    ) -> Result<HashMap<bitcoin::Txid, json::GetMempoolEntryResult>> {
+        self.call("getrawmempool", &[into_json(true)?])
     }
 
     /// Get mempool data for given transaction
@@ -1137,8 +1197,16 @@ pub trait RpcApi: Sized {
         self.call("getdescriptorinfo", &[desc.to_string().into()])
     }
 
+    fn join_psbt(&self, psbts: &[String]) -> Result<String> {
+        self.call("joinpsbts", &[into_json(psbts)?])
+    }
+
     fn combine_psbt(&self, psbts: &[String]) -> Result<String> {
         self.call("combinepsbt", &[into_json(psbts)?])
+    }
+
+    fn combine_raw_transaction(&self, hex_strings: &[String]) -> Result<String> {
+        self.call("combinerawtransaction", &[into_json(hex_strings)?])
     }
 
     fn finalize_psbt(&self, psbt: &str, extract: Option<bool>) -> Result<json::FinalizePsbtResult> {
@@ -1169,9 +1237,16 @@ pub trait RpcApi: Sized {
     }
 
     /// Returns statistics about the unspent transaction output set.
-    /// This call may take some time.
-    fn get_tx_out_set_info(&self) -> Result<json::GetTxOutSetInfoResult> {
-        self.call("gettxoutsetinfo", &[])
+    /// Note this call may take some time if you are not using coinstatsindex.
+    fn get_tx_out_set_info(
+        &self,
+        hash_type: Option<json::TxOutSetHashType>,
+        hash_or_height: Option<json::HashOrHeight>,
+        use_index: Option<bool>,
+    ) -> Result<json::GetTxOutSetInfoResult> {
+        let mut args =
+            [opt_into_json(hash_type)?, opt_into_json(hash_or_height)?, opt_into_json(use_index)?];
+        self.call("gettxoutsetinfo", handle_defaults(&mut args, &[null(), null(), null()]))
     }
 
     /// Returns information about network traffic, including bytes in, bytes out,
@@ -1189,6 +1264,27 @@ pub trait RpcApi: Sized {
     /// Returns the total uptime of the server in seconds
     fn uptime(&self) -> Result<u64> {
         self.call("uptime", &[])
+    }
+
+    /// Submit a block
+    fn submit_block(&self, block: &bitcoin::Block) -> Result<()> {
+        let block_hex: String = bitcoin::consensus::encode::serialize_hex(block);
+        self.submit_block_hex(&block_hex)
+    }
+
+    /// Submit a raw block
+    fn submit_block_bytes(&self, block_bytes: &[u8]) -> Result<()> {
+        let block_hex: String = block_bytes.to_hex();
+        self.submit_block_hex(&block_hex)
+    }
+
+    /// Submit a block as a hex string
+    fn submit_block_hex(&self, block_hex: &str) -> Result<()> {
+        match self.call("submitblock", &[into_json(&block_hex)?]) {
+            Ok(serde_json::Value::Null) => Ok(()),
+            Ok(res) => Err(Error::ReturnedError(res.to_string())),
+            Err(err) => Err(err.into()),
+        }
     }
 
     fn scan_tx_out_set_blocking(
@@ -1292,12 +1388,12 @@ fn log_response(cmd: &str, resp: &Result<jsonrpc::Response>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitcoin;
+    use crate::bitcoin;
     use serde_json;
 
     #[test]
     fn test_raw_tx() {
-        use bitcoin::consensus::encode;
+        use crate::bitcoin::consensus::encode;
         let client = Client::new("http://localhost/".into(), Auth::None).unwrap();
         let tx: bitcoin::Transaction = encode::deserialize(&Vec::<u8>::from_hex("0200000001586bd02815cf5faabfec986a4e50d25dbee089bd2758621e61c5fab06c334af0000000006b483045022100e85425f6d7c589972ee061413bcf08dc8c8e589ce37b217535a42af924f0e4d602205c9ba9cb14ef15513c9d946fa1c4b797883e748e8c32171bdf6166583946e35c012103dae30a4d7870cd87b45dd53e6012f71318fdd059c1c2623b8cc73f8af287bb2dfeffffff021dc4260c010000001976a914f602e88b2b5901d8aab15ebe4a97cf92ec6e03b388ac00e1f505000000001976a914687ffeffe8cf4e4c038da46a9b1d37db385a472d88acfd211500").unwrap()).unwrap();
 
